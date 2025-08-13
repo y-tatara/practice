@@ -1,0 +1,72 @@
+services:
+  # MySQL データベース
+  db:
+    image: mysql:8.0.28
+    platform: linux/amd64
+    container_name: construction-db
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpass
+      MYSQL_DATABASE: construction_mgmt
+      MYSQL_USER: app
+      MYSQL_PASSWORD: apppass
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./docker/mysql/init:/docker-entrypoint-initdb.d
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    restart: unless-stopped
+
+  # MinIO (S3互換ストレージ)
+  minio:
+    image: minio/minio:latest
+    container_name: construction-minio
+    environment:
+      MINIO_ROOT_USER: admin
+      MINIO_ROOT_PASSWORD: password
+    ports:
+      - "9010:9000"
+      - "9011:9001"
+    volumes:
+      - minio_data:/data
+    command: server /data --console-address ":9001"
+    restart: unless-stopped
+
+  # Go バックエンド API
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile.dev
+    container_name: construction-api
+    environment:
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_USER: app
+      DB_PASSWORD: apppass
+      DB_NAME: construction_mgmt
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: admin
+      MINIO_SECRET_KEY: password
+      MINIO_BUCKET: construction-files
+      JWT_SECRET: your-secret-key-here
+      PORT: 8080
+    ports:
+      - "8080:8080"
+    depends_on:
+      - db
+      - minio
+    volumes:
+      - ./api:/app
+      - api_cache:/go/pkg/mod
+    restart: unless-stopped
+    develop:
+      watch:
+        - action: rebuild
+          path: ./api
+          ignore:
+            - ./api/bin/
+
+volumes:
+  mysql_data:
+  minio_data:
+  api_cache:
