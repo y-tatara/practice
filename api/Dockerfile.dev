@@ -1,0 +1,22 @@
+FROM --platform=linux/amd64 golang:1.24.6-alpine AS builder
+
+WORKDIR /app
+COPY ./go.mod ./go.sum ./Makefile ./
+RUN apk update && \
+    apk add --update --no-cache git && \
+    apk add --no-cache gcc && \
+    apk add --no-cache musl-dev && \
+    apk add --no-cache make && \
+    # タイムゾーンの指定（指定しないとテストが通らないため）
+    apk add --no-cache tzdata && \
+    cp /usr/share/zoneinfo/Asia/Tokyo /etc/localtime && \
+    echo "Asia/Tokyo" > /etc/timezone && \
+    wget https://github.com/golang-migrate/migrate/releases/download/v4.15.0/migrate.linux-amd64.tar.gz && \
+    tar -zxvf migrate.linux-amd64.tar.gz && \
+    mkdir -p /usr/local/bin && \
+    mv migrate /usr/local/bin/migrate && \
+    go install github.com/air-verse/air@latest
+
+RUN go mod download
+
+EXPOSE 80
